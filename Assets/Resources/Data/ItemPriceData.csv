@@ -1,0 +1,5 @@
+key,food_name,base_price,package_price,description
+string,string,int32,int32,string
+Stage_1_Burger_Price,Burger,10,0,버거 홀/카운터 단품 기본 판매가
+Stage_1_BurgerPackage_Price,BurgerPackage,0,15,포장/드라이브스루 세트 판매가
+Stage_1_Expand_Burger_Price,ExpandBurger,12,0,확장 구역 테이블 판매 시 보너스 단가

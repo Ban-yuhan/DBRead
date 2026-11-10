@@ -1,76 +1,296 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 namespace MyCSVSystem
 {
     public class EntryCloner : MonoBehaviour
     {
-        [Header("¿¬°áÇÒ CSV ¼³Á¤")]
-        [Tooltip("ÀĞ¾î¿Ã Å×ÀÌºí ÀÌ¸§")]
+        [Header("ì—°ë™í•  CSV ì„¤ì •")]
+        [Tooltip("ì½ì–´ì˜¬ í…Œì´ë¸” ì´ë¦„")]
         public string targetTable = "Facility";
 
-        [Tooltip("°¡Á®¿Ã ÇàÀÇ ID")]
+        [Tooltip("ì—°ë™í•  ë°ì´í„° ID")]
         public string targetID = "1";
 
-        [Tooltip("°ÔÀÓ ½ÃÀÛ ½Ã ÀÚµ¿À¸·Î Å×ÀÌÅÍ¸¦ ºÒ·¯¿Ã Áö ¿©ºÎ")]
+        [Tooltip("ì‹œì‘ ì‹œ ìë™ìœ¼ë¡œ ë°ì´í„°ë¥¼ ë¶ˆëŸ¬ì˜¬ì§€ ì—¬ë¶€")]
         public bool autoInit = true;
 
-        private Dictionary<string, object> _runtimeStats = new Dictionary<string, object>();
+        [Header("ì„¸ì´ë¸Œ ë°ì´í„° ì—°ë™")]
+        public bool useSaveData = true;
+
+        [Tooltip("ë¹„ì›Œë‘˜ ê²½ìš° gameObject.nameì„ ìë™ìœ¼ë¡œ ì‚¬ìš©")]
+        public string saveKey = "";
+
+        public string EffectiveSaveKey => string.IsNullOrEmpty(saveKey) ? gameObject.name : saveKey;
+
+        private Dictionary<string, object> _runtimeStats = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        private bool _isInitialized = false;
 
         private void Start()
         {
-            if(autoInit && !string.IsNullOrEmpty(targetID))
+            if (autoInit && !_isInitialized)
+            {
+                EnsureInitialized();
+            }
+        }
+
+        /// <summary>
+        /// ë ˆë²¨ì— í•´ë‹¹í•˜ëŠ” ì ì ˆí•œ í–‰ ID(ë³µí•©í‚¤ ë˜ëŠ” ë‹¨ìˆœ ë ˆë²¨ ë²ˆí˜¸)ë¥¼ ìŠ¤ë§ˆíŠ¸í•˜ê²Œ íŒë³„í•©ë‹ˆë‹¤.
+        /// </summary>
+        private string ResolveRowIdForLevel(int level)
+        {
+            if (DatabaseManager.Instance != null)
+            {
+                var table = DatabaseManager.Instance.GetTable(targetTable);
+                if (table != null)
+                {
+                    // 1. {EffectiveSaveKey}_{level} ë³µí•©í‚¤ ì¡´ì¬ í™•ì¸ (ì˜ˆ: BurgerMachine_1_1, Stage_1_BurgerMachine_1_1)
+                    string compositeKey = $"{EffectiveSaveKey}_{level}";
+                    if (table.HasRow(compositeKey))
+                    {
+                        return compositeKey;
+                    }
+
+                    // 2. Stage_1_ ì ‘ë‘ì–´ê°€ ëˆ„ë½ëœ ê²½ìš° ìë™ ë³´ì • (ì˜ˆ: saveKey="BurgerMachine_1" -> "Stage_1_BurgerMachine_1_1")
+                    if (!EffectiveSaveKey.StartsWith("Stage_1_", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string stageCompositeKey = $"Stage_1_{EffectiveSaveKey}_{level}";
+                        if (table.HasRow(stageCompositeKey))
+                        {
+                            return stageCompositeKey;
+                        }
+                    }
+                }
+            }
+
+            // 3. ë³µí•©í‚¤ê°€ ì—†ìœ¼ë©´ ê¸°ì¡´ ë‹¨ìˆœ ë ˆë²¨ ë²ˆí˜¸ (ì˜ˆ: "1", "2") ë°˜í™˜ (100% í•˜ìœ„ í˜¸í™˜)
+            return level.ToString();
+        }
+
+        private void EnsureInitialized()
+        {
+            if (_isInitialized) return;
+            _isInitialized = true;
+
+            if (useSaveData && SaveManager.Instance != null)
+            {
+                int level = SaveManager.Instance.GetLevel(EffectiveSaveKey, 1);
+                string rowId = ResolveRowIdForLevel(level);
+                InitFromDB(targetTable, rowId);
+            }
+            else if (!string.IsNullOrEmpty(targetID))
             {
                 InitFromDB(targetTable, targetID);
             }
         }
 
+        public int UpgradeLevel(int maxLevel = 10)
+        {
+            if (SaveManager.Instance != null)
+            {
+                int newLevel = SaveManager.Instance.UpgradeLevel(EffectiveSaveKey, maxLevel);
+                string rowId = ResolveRowIdForLevel(newLevel);
+                InitFromDB(targetTable, rowId);
+                return newLevel;
+            }
+            else
+            {
+                Debug.LogWarning($"[EntryCloner] SaveManager ì¸ìŠ¤í„´ìŠ¤ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤. ({gameObject.name})");
+                if (int.TryParse(targetID, out int cur)) return cur;
+                return 1;
+            }
+        }
+
         public void InitFromDB(string tableName, string id)
         {
-            if(DatabaseManager.Instance == null)
+            _isInitialized = true;
+
+            if (!string.IsNullOrEmpty(tableName))
             {
-                Debug.LogError("[EntryCloner] Databasemanager°¡ ¾À¿¡ ¾ø½À´Ï´Ù");
+                targetTable = tableName;
+            }
+            if (!string.IsNullOrEmpty(id))
+            {
+                targetID = id;
+            }
+
+            if (DatabaseManager.Instance == null)
+            {
+                Debug.LogError("[EntryCloner] DatabaseManager ì¸ìŠ¤í„´ìŠ¤ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
                 return;
             }
 
             var table = DatabaseManager.Instance.GetTable(tableName);
             var row = table?.GetRow(id);
 
-            if(row == null)
+            if (row == null)
             {
-                Debug.LogWarning($"[EntryCloner] '{tableName}' Å×ÀÌºí¿¡¼­ ID '{id}'µ¥ÀÌÅÍ¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.");
+                Debug.LogWarning($"[EntryCloner] '{tableName}' í…Œì´ë¸”ì—ì„œ ID '{id}' ë°ì´í„°ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
                 return;
             }
 
             _runtimeStats.Clear();
 
-            foreach(var col in row.GetColumns())
+            foreach (var col in row.GetColumns())
             {
                 _runtimeStats[col] = row.Get<object>(col);
             }
 
-            Debug.Log($"<color=cyan>[EntryCloner]</color> {gameObject.name}¿¡ [{tableName} - ID:{id}] µ¥ÀÌÅÍ ÀåÂø ¿Ï·á");
+            Debug.Log($"<color=cyan>[EntryCloner]</color> {gameObject.name}ì— [{tableName} - ID:{id}] ë°ì´í„° ì¥ì°© ì™„ë£Œ");
         }
 
-        public T GetStat<T>(string key)
+        public bool TryGetStat<T>(string key, out T result)
         {
-            if (_runtimeStats.TryGetValue(key, out object val))
+            if (!_isInitialized)
             {
-                try { return (T)Convert.ChangeType(val, typeof(T)); }
-                catch { return (T)val; }
+                EnsureInitialized();
             }
 
-            Debug.LogWarning($"[EntryCloner] '{key}' ½ºÅÈÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù");
-            return default;
+            if (string.IsNullOrEmpty(key))
+            {
+                result = default;
+                return false;
+            }
+
+            if (!_runtimeStats.TryGetValue(key, out object val) || val == null)
+            {
+                // Fallback 1: ì–¸ë”ìŠ¤ì½”ì–´ ìœ ë¬´ ì°¨ì´ ìë™ ë³´ì • (ì˜ˆ: ProduceTime <-> produce_time, processtime <-> process_time)
+                string strippedKey = key.Replace("_", "");
+                foreach (var kvp in _runtimeStats)
+                {
+                    if (kvp.Key.Replace("_", "").Equals(strippedKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        val = kvp.Value;
+                        break;
+                    }
+                }
+
+                // Fallback 2: ProduceTime <-> process_time ìƒí˜¸ í˜¸í™˜ ë§¤í•‘
+                if (val == null)
+                {
+                    if (key.Equals("ProduceTime", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _runtimeStats.TryGetValue("process_time", out val);
+                    }
+                    else if (key.Equals("process_time", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _runtimeStats.TryGetValue("ProduceTime", out val);
+                    }
+                }
+
+                if (val == null)
+                {
+                    result = default;
+                    return false;
+                }
+            }
+
+            if (val is T direct)
+            {
+                result = direct;
+                return true;
+            }
+
+            try
+            {
+                Type targetType = typeof(T);
+                Type underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+                if (underlyingType.IsEnum)
+                {
+                    if (val is string strVal)
+                    {
+                        result = (T)Enum.Parse(underlyingType, strVal, true);
+                        return true;
+                    }
+                    result = (T)Enum.ToObject(underlyingType, val);
+                    return true;
+                }
+
+                if (underlyingType == typeof(string))
+                {
+                    result = (T)(object)val.ToString();
+                    return true;
+                }
+
+                if (val is string s)
+                {
+                    s = s.Trim();
+                    if (string.IsNullOrEmpty(s))
+                    {
+                        result = default;
+                        return false;
+                    }
+
+                    if (underlyingType == typeof(float))
+                    {
+                        if (float.TryParse(s.TrimEnd('f', 'F'), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float f))
+                        {
+                            result = (T)(object)f;
+                            return true;
+                        }
+                    }
+                    else if (underlyingType == typeof(double))
+                    {
+                        if (double.TryParse(s.TrimEnd('f', 'F', 'd', 'D'), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double d))
+                        {
+                            result = (T)(object)d;
+                            return true;
+                        }
+                    }
+                    else if (underlyingType == typeof(int))
+                    {
+                        if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out int i))
+                        {
+                            result = (T)(object)i;
+                            return true;
+                        }
+                    }
+                    else if (underlyingType == typeof(long))
+                    {
+                        if (long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out long l))
+                        {
+                            result = (T)(object)l;
+                            return true;
+                        }
+                    }
+                    else if (underlyingType == typeof(bool))
+                    {
+                        if (bool.TryParse(s, out bool b))
+                        {
+                            result = (T)(object)b;
+                            return true;
+                        }
+                        if (s == "1") { result = (T)(object)true; return true; }
+                        if (s == "0") { result = (T)(object)false; return true; }
+                    }
+                }
+
+                result = (T)Convert.ChangeType(val, underlyingType, CultureInfo.InvariantCulture);
+                return true;
+            }
+            catch
+            {
+                result = default;
+                return false;
+            }
+        }
+
+        public T GetStat<T>(string key, T defaultValue = default)
+        {
+            if (TryGetStat<T>(key, out T result))
+            {
+                return result;
+            }
+
+            return defaultValue;
         }
 
         public void SetStat(string key, object val)
         {
-            if(_runtimeStats.ContainsKey(key))
-            {
-                _runtimeStats[key] = val;
-            }
+            _runtimeStats[key] = val;
         }
     }
 }

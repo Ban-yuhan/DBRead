@@ -427,6 +427,7 @@ GameObject:
   - component: {fileID: 475033338}
   - component: {fileID: 475033337}
   - component: {fileID: 475033336}
+  - component: {fileID: 475033341}
   m_Layer: 0
   m_Name: Burger_Machine_Lv2
   m_TagString: Untagged
@@ -446,7 +447,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 981694c97b42ef54f98c638edbb944f3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MyCSVSystem.EntryCloner
-  targetTable: Facility
+  targetTable: FacilityData
   targetID: 2
   autoInit: 1
 --- !u!65 &475033337
@@ -542,6 +543,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &475033341
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 475033335}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65f4a48ae5ed0b94d977bfa1b6520fc1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BurgerMachineTest
+  ProduceTime: 0
+  Capacity: 0
 --- !u!1 &759590524
 GameObject:
   m_ObjectHideFlags: 0
@@ -552,7 +567,6 @@ GameObject:
   m_Component:
   - component: {fileID: 759590527}
   - component: {fileID: 759590526}
-  - component: {fileID: 759590525}
   m_Layer: 0
   m_Name: DatabaseManager
   m_TagString: Untagged
@@ -560,18 +574,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &759590525
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 759590524}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 05022277ea545c442a1436a5d73ccf34, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TestCSVLoader
 --- !u!114 &759590526
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -692,6 +694,7 @@ GameObject:
   - component: {fileID: 1599030731}
   - component: {fileID: 1599030730}
   - component: {fileID: 1599030729}
+  - component: {fileID: 1599030734}
   m_Layer: 0
   m_Name: Burger_Machine_Lv1
   m_TagString: Untagged
@@ -711,7 +714,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 981694c97b42ef54f98c638edbb944f3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MyCSVSystem.EntryCloner
-  targetTable: Facility
+  targetTable: FacilityData
   targetID: 1
   autoInit: 1
 --- !u!65 &1599030730
@@ -807,6 +810,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1599030734
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1599030728}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65f4a48ae5ed0b94d977bfa1b6520fc1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BurgerMachineTest
+  ProduceTime: 0
+  Capacity: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -6,10 +6,9 @@ namespace MyCSVSystem
 {
     public class DatabaseManager : MonoBehaviour
     {
-        //½Ì±ÛÅæ ¼±¾ğ
         public static DatabaseManager Instance { get; private set; }
 
-        private Dictionary<string, TableData> _tables = new Dictionary<string, TableData>();
+        private Dictionary<string, TableData> _tables = new Dictionary<string, TableData>(StringComparer.OrdinalIgnoreCase);
 
         private void Awake()
         {
@@ -17,6 +16,8 @@ namespace MyCSVSystem
             {
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
+
+                LoadAllTablesInFolder("Data");
             }
             else
             {
@@ -24,59 +25,122 @@ namespace MyCSVSystem
             }
         }
 
-        //ÇØ´ç À§Ä¡¿¡ ÀÖ´Â ÀÌ¸§ÀÇ CSV¸¦ ÀĞÀ¸¶ó°í ¸í·É
         public void LoadTable(string tableName, string resourcePath)
         {
             TextAsset csvFile = Resources.Load<TextAsset>(resourcePath);
-            if(csvFile == null)
+            if (csvFile == null)
             {
-                Debug.LogError($"[DatabaseManager] CSV ÆÄÀÏÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù: Resources/{resourcePath}");
+                Debug.LogError($"[DatabaseManager] CSV íŒŒì¼ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤: Resources/{resourcePath}");
                 return;
             }
 
-            string[] lines = csvFile.text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+            List<List<string>> rows = CSVParser.ParseCSV(csvFile.text);
 
-            if(lines.Length <3)
+            if (rows == null || rows.Count < 3)
             {
-                Debug.LogWarning($"[Databasemanager] '{tableName}' ÆÄÀÏÀÇ µ¥ÀÌÅÍ°¡ ºÎÁ·ÇÕ´Ï´Ù.");
+                Debug.LogWarning($"[DatabaseManager] '{tableName}'ì˜ ë°ì´í„°ê°€ ë¶€ì¡±í•©ë‹ˆë‹¤.");
                 return;
             }
 
-            string[] headers = lines[0].Trim().Split(',');
-            string[] types = lines[1].Trim().Split(',');
+            List<string> headers = rows[0];
+            List<string> types = rows[1];
             TableData newTable = new TableData();
 
-            for(int i = 2; i < lines.Length; i++)
+            int loadedRowCount = 0;
+
+            for (int i = 2; i < rows.Count; i++)
             {
-                string[] values = lines[i].Trim().Split(',');
-                if (values.Length < headers.Length) continue;
+                List<string> values = rows[i];
+
+                // ì™„ì „íˆ ë¹„ì–´ìˆëŠ” í–‰ ê±´ë„ˆë›°ê¸°
+                bool allEmpty = true;
+                for (int k = 0; k < values.Count; k++)
+                {
+                    if (!string.IsNullOrWhiteSpace(values[k]))
+                    {
+                        allEmpty = false;
+                        break;
+                    }
+                }
+                if (allEmpty) continue;
+
+                // ë¶€ì¡±í•œ í•„ë“œì— string.Emptyë¥¼ ìë™ íŒ¨ë”©í•˜ì—¬ íŒŒì„œë¡œ ë„˜ê¹€ (ì‚¬ì¼ëŸ°íŠ¸ í–‰ ëˆ„ë½ ë°©ì§€)
+                string[] paddedValues = new string[headers.Count];
+                for (int j = 0; j < headers.Count; j++)
+                {
+                    if (j < values.Count)
+                    {
+                        paddedValues[j] = values[j];
+                    }
+                    else
+                    {
+                        paddedValues[j] = string.Empty;
+                    }
+                }
 
                 RowEntity row = new RowEntity();
 
-                for(int j = 0; j < headers.Length; j++)
+                for (int j = 0; j < headers.Count; j++)
                 {
-                    object parsedValue = CSVParser.ParseValue(types[j], values[j]);
-                    
-                    row.SetField(headers[j], parsedValue, types[j]);
+                    string header = headers[j].Trim();
+                    if (string.IsNullOrEmpty(header)) continue;
+
+                    string colType = j < types.Count ? types[j].Trim() : "string";
+                    object parsedValue = CSVParser.ParseValue(colType, paddedValues[j]);
+
+                    row.SetField(header, parsedValue, colType);
                 }
 
-                newTable.AddRow(values[0], row);
+                string rowId = paddedValues[0].Trim();
+                newTable.AddRow(rowId, row);
+                loadedRowCount++;
             }
 
             _tables[tableName] = newTable;
-            Debug.Log($"<color=green>[DatabaseManager]</color> Å×ÀÌºí ·Îµå ¿Ï·á : <b>{tableName}</b> ({lines.Length - 2}°³ Çà)");
+            Debug.Log($"<color=green>[DatabaseManager]</color> í…Œì´ë¸” ë¡œë“œ ì™„ë£Œ : <b>{tableName}</b> ({loadedRowCount}ê°œ í–‰)");
         }
 
         public TableData GetTable(string tableName)
         {
-            if (_tables.TryGetValue(tableName, out var table)) return table;
-            //out : µÎ°³ ÀÌ»óÀÇ °á°ú¹°À» ¸®ÅÏ ½ÃÅ°°í ½ÍÀ» ‹š, ºó °ø°£À» ¸¸µé¾î¼­ ´ã¾Æ ¸®ÅÏ ½ÃÅ´.
-            //var : Å¸ÀÔ ÀÚµ¿¸ÂÃã. º¯¼ö¸¦ º¸°í Å¸ÀÔÀ» ÀÚµ¿À¸·Î ¸ÂÃçÁÜ.
+            if (string.IsNullOrEmpty(tableName)) return null;
 
-            Debug.LogWarning($"[DatabaseManager] '{tableName}' Å×ÀÌºíÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù.");
+            if (_tables.TryGetValue(tableName, out var table)) return table;
+
+            // 'Facility' <-> 'FacilityData' ìƒí˜¸ í˜¸í™˜ ìë™ fallback
+            if (tableName.EndsWith("Data", StringComparison.OrdinalIgnoreCase))
+            {
+                string stripped = tableName.Substring(0, tableName.Length - 4);
+                if (_tables.TryGetValue(stripped, out table)) return table;
+            }
+            else
+            {
+                string appended = tableName + "Data";
+                if (_tables.TryGetValue(appended, out table)) return table;
+            }
+
+            Debug.LogWarning($"[DatabaseManager] '{tableName}' í…Œì´ë¸”ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
             return null;
         }
 
         public void Clear() => _tables.Clear();
+
+        public void LoadAllTablesInFolder(string folderPath)
+        {
+            TextAsset[] allCsvFiles = Resources.LoadAll<TextAsset>(folderPath);
+
+            if (allCsvFiles == null || allCsvFiles.Length == 0)
+            {
+                Debug.LogWarning($"[DatabaseManager] '{folderPath}' ë‚´ CSV íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.");
+                return;
+            }
+
+            foreach (TextAsset csv in allCsvFiles)
+            {
+                string tableName = csv.name;
+                LoadTable(tableName, $"{folderPath}/{tableName}");
+            }
+
+            Debug.Log($"<color=cyan><b>[DatabaseManager]</b> ì´ {allCsvFiles.Length}ê°œ CSV í…Œì´ë¸” ìë™ ë¡œë“œ ì™„ë£Œ!</color>");
+        }
     }
 }

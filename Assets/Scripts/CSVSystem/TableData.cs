@@ -1,40 +1,107 @@
-using UnityEngine;
-using System.Linq; //µ¥ÀÌÅÍ¸¦ ½±°Ô °Ë»ö(FirstOrDefault µî)ÇÏ±â À§ÇØ ÇÊ¿äÇÑ ¸¶ÀÌÅ©·Î¼ÒÇÁÆ® µµ±¸
+using System;
 using System.Collections.Generic;
-
+using System.Globalization;
+using System.Linq;
+using UnityEngine;
 
 namespace MyCSVSystem
 {
-    // CSV ÆÄÀÏ 1°³ ÀüÃ¼ÀÇ µ¥ÀÌÅÍ(¿©·¯ °³ÀÇ RwoEntity)¸¦ º¸°üÇÏ´Â ¼­¶øÀå Å¬·¡½º
-    public class TableData : MonoBehaviour
+    /// <summary>
+    /// ë‹¨ì¼ CSV í…Œì´ë¸”ì˜ ì „ì²´ ë°ì´í„°(í–‰ë“¤ì˜ ëª¨ìŒ)ë¥¼ ê´€ë¦¬í•˜ëŠ” í´ë˜ìŠ¤
+    /// </summary>
+    public class TableData
     {
-        private Dictionary<string, RowEntity> _rows = new Dictionary<string, RowEntity>();
+        private Dictionary<string, RowEntity> _rows = new Dictionary<string, RowEntity>(StringComparer.OrdinalIgnoreCase);
 
         public void AddRow(string id, RowEntity row)
         {
-            _rows[id] = row;
+            if (!string.IsNullOrEmpty(id))
+            {
+                _rows[id] = row;
+            }
         }
 
+        /// <summary>
+        /// íŠ¹ì • ID ë˜ëŠ” Keyë¥¼ ê°€ì§„ í–‰ì´ ì¡´ì¬í•˜ëŠ”ì§€ í™•ì¸í•©ë‹ˆë‹¤.
+        /// </summary>
+        public bool HasRow(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return false;
+            return TryGetRow(id, out _);
+        }
 
-        //ID·Î ¿øÇÏ´Â Çà µ¥ÀÌÅÍ¸¦ Áï½Ã Ã£¾Æ ²¨³¿.
+        /// <summary>
+        /// ID/Keyì— í•´ë‹¹í•˜ëŠ” í–‰ì„ ì•ˆì „í•˜ê²Œ ì¡°íšŒí•©ë‹ˆë‹¤.
+        /// 1ì°¨ë¡œ Dictionaryì—ì„œ ê²€ìƒ‰í•˜ê³ , ì—†ì„ ê²½ìš° idê°€ ìˆ«ìì´ë©´ level ì»¬ëŸ¼ìœ¼ë¡œ 2ì°¨ ìŠ¤ë§ˆíŠ¸ í´ë°± ê²€ìƒ‰í•©ë‹ˆë‹¤.
+        /// </summary>
+        public bool TryGetRow(string id, out RowEntity row)
+        {
+            if (string.IsNullOrEmpty(id))
+            {
+                row = null;
+                return false;
+            }
+
+            // 1ì°¨: Dictionaryì—ì„œ ê²€ìƒ‰
+            if (_rows.TryGetValue(id, out row))
+            {
+                return true;
+            }
+
+            // 2ì°¨ ìŠ¤ë§ˆíŠ¸ í´ë°±: idê°€ ìˆ«ìì¸ ê²½ìš°, "level" ì»¬ëŸ¼ ê°’ì´ í•´ë‹¹ idì™€ ì¼ì¹˜í•˜ëŠ” í–‰ ê²€ìƒ‰
+            if (int.TryParse(id.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int numericId))
+            {
+                foreach (var r in _rows.Values)
+                {
+                    if (r.TryGetStat<int>("level", out int levelVal) && levelVal == numericId)
+                    {
+                        row = r;
+                        return true;
+                    }
+                }
+
+                // ë ˆê±°ì‹œ ID(10001~10015, 20001~20010 ë“±) í˜¸í™˜ ìŠ¤ë§ˆíŠ¸ í´ë°±
+                int legacyLevel = -1;
+                if (numericId >= 10001 && numericId <= 10099) legacyLevel = numericId - 10000;
+                else if (numericId >= 20001 && numericId <= 20099) legacyLevel = numericId - 20000;
+
+                if (legacyLevel > 0)
+                {
+                    foreach (var r in _rows.Values)
+                    {
+                        if (r.TryGetStat<int>("level", out int levelVal) && levelVal == legacyLevel)
+                        {
+                            row = r;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            row = null;
+            return false;
+        }
+
+        /// <summary>
+        /// ID/Keyì— í•´ë‹¹í•˜ëŠ” í–‰ì„ ì¡°íšŒí•©ë‹ˆë‹¤. ì—†ìœ¼ë©´ ê²½ê³  ë¡œê·¸ë¥¼ ì¶œë ¥í•˜ê³  nullì„ ë°˜í™˜í•©ë‹ˆë‹¤.
+        /// </summary>
         public RowEntity GetRow(string id)
         {
-            if (_rows.TryGetValue(id, out var row))
+            if (TryGetRow(id, out var row))
             {
                 return row;
             }
 
-            Debug.LogWarning($"[TableData] ID '[id]'¿¡ ÇØ´çÇÏ´Â µ¥ÀÌÅÍ¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.");
-
+            Debug.LogWarning($"[TableData] ID '{id}'ì— í•´ë‹¹í•˜ëŠ” ë°ì´í„°ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
             return null;
         }
 
-
-        //ID¸¦ ¸ô¶óµµ 'ÀÌ¸§'ÀÌ³ª Æ¯Á¤ ÄÃ·³ÀÇ °ªÀ¸·Î ÇàÀ» Ã£À½. ex) FindRowByColumn("Name", "Ä¡Áî¹ö°Å")
+        /// <summary>
+        /// íŠ¹ì • ì»¬ëŸ¼ì˜ ê°’ìœ¼ë¡œ í–‰ì„ ê²€ìƒ‰í•©ë‹ˆë‹¤. ex) FindRowByColumn("facility_name", "ë²„ê±° ì¡°ë¦¬ëŒ€ 1")
+        /// </summary>
         public RowEntity FindRowByColumn(string columnName, string value)
         {
             return _rows.Values.FirstOrDefault(r => r.Get<string>(columnName) == value);
-            //FirstOrDefault : Á¶°Ç¿¡ ¸Â´Â Ã¹ ¹øÂ° °ªÀ» °¡Á®¿À°í ¾øÀ¸¸é ¿¡·¯°¡ ¾Æ´Ñ ±âº»°ª nullÀ» ¹İÈ¯. Systme.Linq³×ÀÓ½ºÆäÀÌ½º ±â´É.
         }
 
         public IEnumerable<RowEntity> AllRows => _rows.Values;

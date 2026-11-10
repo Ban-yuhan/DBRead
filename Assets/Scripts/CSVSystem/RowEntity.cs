@@ -1,17 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 namespace MyCSVSystem
 {
-    //∞°∑Œ 1¡Ÿ ∫–∑Æ¿« µ•¿Ã≈ÕµÈ¿ª ¿Ã∏ß«•∏¶ ∫Ÿø© æ»¿¸«œ∞‘ ∞°¡ˆ∞Ì ¿÷¥¬ ∫∏∞¸«‘ ø™«“
-    public class RowEntity : MonoBehaviour
+    public class RowEntity
     {
-        //ƒ√∑≥ ¿Ã∏ß¿ª keyªÔæ∆ µ•¿Ã≈Õ ¿˙¿Â. ex) ["ProduceTime", "3.5f"]
-        private Dictionary<string, object> _data = new Dictionary<string, object>();
-
-        //ƒ√∑≥ ≈∏¿‘ ¿Ã∏ßµµ «‘≤≤ ¿˙¿Â.ex) ["ProduceTime", "float"]
-        private Dictionary<string, string> _columnTypes = new Dictionary<string, string>();
+        private Dictionary<string, object> _data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, string> _columnTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public void SetField(string columnName, object value, string columnType)
         {
@@ -19,31 +16,154 @@ namespace MyCSVSystem
             _columnTypes[columnName] = columnType;
         }
 
-
-        //--------------------------------------------------------------------------------
-
-        //∞‘¿” ∑Œ¡˜¿Ã≥™ ¥Ÿ∏• Ω∫≈©∏≥∆Æø°º≠ ø¯«œ¥¬ µ•¿Ã≈Õ∏¶ ≤®≥ª æµ ∂ß »£√‚«œ¥¬ «‘ºˆ
-        public T Get<T>(string columnName)
+        public bool TryGetStat<T>(string key, out T result)
         {
-            //∫∏∞¸«‘ø° «ÿ¥Á ƒ√∑≥ ¿Ã∏ß¿« µ•¿Ã≈Õ∞° ¿÷¥¬¡ˆ »Æ¿Œ
-            if(_data.TryGetValue(columnName, out object value))
+            if (string.IsNullOrEmpty(key))
             {
-                if (value == null)
-                    return default;
+                result = default;
+                return false;
+            }
 
-                try
+            if (!_data.TryGetValue(key, out object value) || value == null)
+            {
+                // Fallback: Ïñ∏ÎçîÏä§ÏΩîÏñ¥ Ïú†Î¨¥ Ï∞®Ïù¥ ÏûêÎèô Î≥¥Ï†ï
+                string strippedKey = key.Replace("_", "");
+                foreach (var kvp in _data)
                 {
-                    //≤®≥Ω object µ•¿Ã≈Õ∏¶ ø¯«œ¥¬ ≈∏¿‘(T)∑Œ æ»¿¸«œ∞‘ ∫Ø»Ø
-                    return (T)Convert.ChangeType(value, typeof(T));
+                    if (kvp.Key.Replace("_", "").Equals(strippedKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        value = kvp.Value;
+                        break;
+                    }
                 }
-                catch
+
+                if (value == null)
                 {
-                    //∫Ø»Øø° Ω«∆–«œ∏È ∞≠¡¶ «¸∫Ø»Ø Ω√µµ
-                    return (T)value;
+                    if (key.Equals("ProduceTime", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _data.TryGetValue("process_time", out value);
+                    }
+                    else if (key.Equals("process_time", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _data.TryGetValue("ProduceTime", out value);
+                    }
+                }
+
+                if (value == null)
+                {
+                    result = default;
+                    return false;
                 }
             }
 
-            Debug.LogWarning($"[RowEntity] ' {columnName}; ƒ√∑≥¿ª √£¿ª ºˆ æ¯Ω¿¥œ¥Ÿ.");
+            if (value is T directValue)
+            {
+                result = directValue;
+                return true;
+            }
+
+            try
+            {
+                Type targetType = typeof(T);
+                Type underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+                if (underlyingType.IsEnum)
+                {
+                    if (value is string strVal)
+                    {
+                        result = (T)Enum.Parse(underlyingType, strVal, true);
+                        return true;
+                    }
+                    result = (T)Enum.ToObject(underlyingType, value);
+                    return true;
+                }
+
+                if (underlyingType == typeof(string))
+                {
+                    result = (T)(object)value.ToString();
+                    return true;
+                }
+
+                if (value is string s)
+                {
+                    s = s.Trim();
+                    if (string.IsNullOrEmpty(s))
+                    {
+                        result = default;
+                        return false;
+                    }
+
+                    if (underlyingType == typeof(float))
+                    {
+                        if (float.TryParse(s.TrimEnd('f', 'F'), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float f))
+                        {
+                            result = (T)(object)f;
+                            return true;
+                        }
+                    }
+                    else if (underlyingType == typeof(double))
+                    {
+                        if (double.TryParse(s.TrimEnd('f', 'F', 'd', 'D'), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double d))
+                        {
+                            result = (T)(object)d;
+                            return true;
+                        }
+                    }
+                    else if (underlyingType == typeof(int))
+                    {
+                        if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out int i))
+                        {
+                            result = (T)(object)i;
+                            return true;
+                        }
+                    }
+                    else if (underlyingType == typeof(long))
+                    {
+                        if (long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out long l))
+                        {
+                            result = (T)(object)l;
+                            return true;
+                        }
+                    }
+                    else if (underlyingType == typeof(bool))
+                    {
+                        if (bool.TryParse(s, out bool b))
+                        {
+                            result = (T)(object)b;
+                            return true;
+                        }
+                        if (s == "1") { result = (T)(object)true; return true; }
+                        if (s == "0") { result = (T)(object)false; return true; }
+                    }
+                }
+
+                result = (T)Convert.ChangeType(value, underlyingType, CultureInfo.InvariantCulture);
+                return true;
+            }
+            catch
+            {
+                result = default;
+                return false;
+            }
+        }
+
+        public T GetStat<T>(string key, T defaultValue = default)
+        {
+            if (TryGetStat<T>(key, out T result))
+            {
+                return result;
+            }
+            return defaultValue;
+        }
+
+        public T Get<T>(string columnName)
+        {
+            if (TryGetStat<T>(columnName, out T result))
+            {
+                return result;
+            }
+
+            Debug.LogWarning($"[RowEntity] '{columnName}' Ïª¨ÎüºÏùÑ Ï∞æÏùÑ Ïàò ÏóÜÏäµÎãàÎã§.");
             return default;
         }
 
@@ -52,14 +172,5 @@ namespace MyCSVSystem
         public string GetColumnType(string columnName) => _columnTypes.GetValueOrDefault(columnName, "");
 
         public bool ContainsColumn(string columnName) => _data.ContainsKey(columnName);
-        /*
-        => (∂˜¥Ÿ/«—¡Ÿ ¡Ÿø©æ≤±‚) : ø¿∏•¬  ∞Õ¿ª πŸ∑Œ return«—¥Ÿ ¥¬ ¿«πÃ.
-        æ∆∑°øÕ øœ¿¸»˜ ∞∞¿Ã ¿€µø
-
-        public bool COntainsColumn(string columnName)
-        {
-            return _data.ContainsKey(columnName);
-        }
-        */
     }
 }
