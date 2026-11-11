@@ -52,7 +52,7 @@ public class BurgerMachineTest : MonoBehaviour
 
     private void RefreshStats()
     {
-        ProduceTime = cloner.GetStat<float>("ProduceTime");
+        ProduceTime = cloner.GetStat<float>("process_time");
         Capacity = cloner.GetStat<int>("Capacity");
     }
 }

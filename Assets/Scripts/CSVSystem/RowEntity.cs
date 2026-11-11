@@ -18,147 +18,29 @@ namespace MyCSVSystem
 
         public bool TryGetStat<T>(string key, out T result)
         {
-            if (string.IsNullOrEmpty(key))
+            if (TryFind(_data, key, out object value))
             {
-                result = default;
-                return false;
+                return TryConvert(value, out result);
             }
 
-            if (!_data.TryGetValue(key, out object value) || value == null)
-            {
-                // Fallback: 언더스코어 유무 차이 자동 보정
-                string strippedKey = key.Replace("_", "");
-                foreach (var kvp in _data)
-                {
-                    if (kvp.Key.Replace("_", "").Equals(strippedKey, StringComparison.OrdinalIgnoreCase))
-                    {
-                        value = kvp.Value;
-                        break;
-                    }
-                }
-
-                if (value == null)
-                {
-                    if (key.Equals("ProduceTime", StringComparison.OrdinalIgnoreCase))
-                    {
-                        _data.TryGetValue("process_time", out value);
-                    }
-                    else if (key.Equals("process_time", StringComparison.OrdinalIgnoreCase))
-                    {
-                        _data.TryGetValue("ProduceTime", out value);
-                    }
-                }
-
-                if (value == null)
-                {
-                    result = default;
-                    return false;
-                }
-            }
-
-            if (value is T directValue)
-            {
-                result = directValue;
-                return true;
-            }
-
-            try
-            {
-                Type targetType = typeof(T);
-                Type underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-
-                if (underlyingType.IsEnum)
-                {
-                    if (value is string strVal)
-                    {
-                        result = (T)Enum.Parse(underlyingType, strVal, true);
-                        return true;
-                    }
-                    result = (T)Enum.ToObject(underlyingType, value);
-                    return true;
-                }
-
-                if (underlyingType == typeof(string))
-                {
-                    result = (T)(object)value.ToString();
-                    return true;
-                }
-
-                if (value is string s)
-                {
-                    s = s.Trim();
-                    if (string.IsNullOrEmpty(s))
-                    {
-                        result = default;
-                        return false;
-                    }
-
-                    if (underlyingType == typeof(float))
-                    {
-                        if (float.TryParse(s.TrimEnd('f', 'F'), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float f))
-                        {
-                            result = (T)(object)f;
-                            return true;
-                        }
-                    }
-                    else if (underlyingType == typeof(double))
-                    {
-                        if (double.TryParse(s.TrimEnd('f', 'F', 'd', 'D'), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double d))
-                        {
-                            result = (T)(object)d;
-                            return true;
-                        }
-                    }
-                    else if (underlyingType == typeof(int))
-                    {
-                        if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out int i))
-                        {
-                            result = (T)(object)i;
-                            return true;
-                        }
-                    }
-                    else if (underlyingType == typeof(long))
-                    {
-                        if (long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out long l))
-                        {
-                            result = (T)(object)l;
-                            return true;
-                        }
-                    }
-                    else if (underlyingType == typeof(bool))
-                    {
-                        if (bool.TryParse(s, out bool b))
-                        {
-                            result = (T)(object)b;
-                            return true;
-                        }
-                        if (s == "1") { result = (T)(object)true; return true; }
-                        if (s == "0") { result = (T)(object)false; return true; }
-                    }
-                }
-
-                result = (T)Convert.ChangeType(value, underlyingType, CultureInfo.InvariantCulture);
-                return true;
-            }
-            catch
-            {
-                result = default;
-                return false;
-            }
+            result = default;
+            return false;
         }
 
         public T GetStat<T>(string key, T defaultValue = default)
         {
-            if (TryGetStat<T>(key, out T result))
+            if (!TryFind(_data, key, out object value))
             {
-                return result;
+                Debug.LogWarning($"[RowEntity] '{key}' 컬럼을 찾을 수 없어 기본값 '{defaultValue}'을(를) 사용합니다.");
+                return defaultValue;
             }
-            return defaultValue;
+
+            return TryConvert(value, out T result) ? result : defaultValue;
         }
 
         public T Get<T>(string columnName)
         {
-            if (TryGetStat<T>(columnName, out T result))
+            if (TryGetStat(columnName, out T result))
             {
                 return result;
             }
@@ -169,8 +51,79 @@ namespace MyCSVSystem
 
         public IEnumerable<string> GetColumns() => _data.Keys;
 
-        public string GetColumnType(string columnName) => _columnTypes.GetValueOrDefault(columnName, "");
+        public string GetColumnType(string columnName) =>
+            _columnTypes.TryGetValue(columnName, out string type) ? type : "";
 
         public bool ContainsColumn(string columnName) => _data.ContainsKey(columnName);
+
+        /// <summary>
+        /// 정확한 이름으로 찾고, 없으면 언더스코어 차이를 무시하고 찾습니다. (ProcessTime == process_time)
+        /// </summary>
+        internal static bool TryFind(Dictionary<string, object> stats, string key, out object value)
+        {
+            value = null;
+            if (string.IsNullOrEmpty(key)) return false;
+            if (stats.TryGetValue(key, out value) && value != null) return true;
+
+            string stripped = key.Replace("_", "");
+            foreach (var kvp in stats)
+            {
+                if (kvp.Value != null && kvp.Key.Replace("_", "").Equals(stripped, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = kvp.Value;
+                    return true;
+                }
+            }
+
+            value = null;
+            return false;
+        }
+
+        internal static bool TryConvert<T>(object value, out T result)
+        {
+            result = default;
+            if (value is T direct)
+            {
+                result = direct;
+                return true;
+            }
+            if (value == null) return false;
+
+            try
+            {
+                Type type = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+                object converted;
+
+                if (type.IsEnum)
+                {
+                    converted = value is string name
+                        ? Enum.Parse(type, name.Trim(), true)
+                        : Enum.ToObject(type, value);
+                }
+                else if (type == typeof(string))
+                {
+                    converted = Convert.ToString(value, CultureInfo.InvariantCulture);
+                }
+                else
+                {
+                    if (value is string text)
+                    {
+                        text = text.Trim();
+                        if (text.Length == 0) return false;
+                        if (type == typeof(float) || type == typeof(double)) text = text.TrimEnd('f', 'F', 'd', 'D');
+                        if (type == typeof(bool) && (text == "1" || text == "0")) text = text == "1" ? "true" : "false";
+                        value = text;
+                    }
+                    converted = Convert.ChangeType(value, type, CultureInfo.InvariantCulture);
+                }
+
+                result = (T)converted;
+                return true;
+            }
+            catch (Exception e) when (e is FormatException || e is InvalidCastException || e is OverflowException || e is ArgumentException)
+            {
+                return false;
+            }
+        }
     }
 }

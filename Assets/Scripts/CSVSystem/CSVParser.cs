@@ -92,6 +92,11 @@ namespace MyCSVSystem
                 }
             }
 
+            if (inQuotes)
+            {
+                Debug.LogWarning($"[CSVParser] 닫히지 않은 큰따옴표가 있습니다. {rows.Count + 1}번째 행 이후 데이터가 한 셀로 합쳐졌을 수 있습니다.");
+            }
+
             if (currentRow.Count > 0 || currentField.Length > 0)
             {
                 currentRow.Add(currentField.ToString());
@@ -162,6 +167,12 @@ namespace MyCSVSystem
             return fields;
         }
 
+        private static object Invalid(string type, string rawValue, object fallback)
+        {
+            Debug.LogWarning($"[CSVParser] '{rawValue}'을(를) {type}(으)로 읽을 수 없어 {fallback}(으)로 처리합니다.");
+            return fallback;
+        }
+
         private static bool IsRowEmpty(List<string> row)
         {
             if (row == null || row.Count == 0) return true;
@@ -186,7 +197,7 @@ namespace MyCSVSystem
                     if (isEmpty) return 0;
                     if (int.TryParse(rawValue.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int intVal))
                         return intVal;
-                    return 0;
+                    return Invalid(type, rawValue, 0);
                 }
 
                 case "int64":
@@ -195,7 +206,7 @@ namespace MyCSVSystem
                     if (isEmpty) return 0L;
                     if (long.TryParse(rawValue.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out long longVal))
                         return longVal;
-                    return 0L;
+                    return Invalid(type, rawValue, 0L);
                 }
 
                 case "float":
@@ -205,7 +216,7 @@ namespace MyCSVSystem
                     string clean = rawValue.Trim().TrimEnd('f', 'F');
                     if (float.TryParse(clean, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float fVal))
                         return fVal;
-                    return 0.0f;
+                    return Invalid(type, rawValue, 0.0f);
                 }
 
                 case "double":
@@ -214,7 +225,7 @@ namespace MyCSVSystem
                     string clean = rawValue.Trim().TrimEnd('d', 'D', 'f', 'F');
                     if (double.TryParse(clean, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double dVal))
                         return dVal;
-                    return 0.0;
+                    return Invalid(type, rawValue, 0.0);
                 }
 
                 case "bool":
@@ -226,7 +237,7 @@ namespace MyCSVSystem
                         return bVal;
                     if (bStr == "1") return true;
                     if (bStr == "0") return false;
-                    return false;
+                    return Invalid(type, rawValue, false);
                 }
 
                 case "string":

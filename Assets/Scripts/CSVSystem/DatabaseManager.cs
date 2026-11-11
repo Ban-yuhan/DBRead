@@ -4,26 +4,62 @@ using UnityEngine;
 
 namespace MyCSVSystem
 {
+    /// <summary>
+    /// Resources 폴더의 CSV를 로드해 테이블로 보관합니다.
+    /// 씬에 없으면 처음 접근할 때 자동 생성되며, 다른 스크립트의 Awake보다 먼저 초기화됩니다.
+    /// </summary>
+    [DefaultExecutionOrder(-2000)]
     public class DatabaseManager : MonoBehaviour
     {
-        public static DatabaseManager Instance { get; private set; }
+        private static DatabaseManager _instance;
+        private static bool _isQuitting;
+
+        public static DatabaseManager Instance
+        {
+            get
+            {
+                if (_instance != null) return _instance;
+                if (_isQuitting || !Application.isPlaying) return null;
+
+#if UNITY_2023_1_OR_NEWER
+                _instance = FindFirstObjectByType<DatabaseManager>();
+#else
+                _instance = FindObjectOfType<DatabaseManager>();
+#endif
+                if (_instance == null)
+                {
+                    new GameObject("@DatabaseManager").AddComponent<DatabaseManager>();
+                }
+                return _instance;
+            }
+        }
+
+        [Tooltip("Resources 아래의 CSV 폴더 경로")]
+        [SerializeField] private string resourceFolder = "Data";
 
         private Dictionary<string, TableData> _tables = new Dictionary<string, TableData>(StringComparer.OrdinalIgnoreCase);
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            _instance = null;
+            _isQuitting = false;
+        }
+
         private void Awake()
         {
-            if (Instance == null)
-            {
-                Instance = this;
-                DontDestroyOnLoad(gameObject);
-
-                LoadAllTablesInFolder("Data");
-            }
-            else
+            if (_instance != null && _instance != this)
             {
                 Destroy(gameObject);
+                return;
             }
+
+            _instance = this;
+            DontDestroyOnLoad(gameObject);
+            LoadAllTablesInFolder(resourceFolder);
         }
+
+        private void OnApplicationQuit() => _isQuitting = true;
 
         public void LoadTable(string tableName, string resourcePath)
         {
