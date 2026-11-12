@@ -1,0 +1,8 @@
+{
+  "name": "com.company.csvsystem",
+  "version": "1.1.0",
+  "displayName": "CSV Data System",
+  "description": "Imports CSV tables into ScriptableObjects in the editor, or loads them from Resources at runtime and applies row values to GameObjects.",
+  "unity": "2021.3",
+  "keywords": ["csv", "data", "table", "scriptableobject"]
+}

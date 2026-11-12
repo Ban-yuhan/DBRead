@@ -1,8 +1,0 @@
-{
-  "name": "com.company.csvsystem",
-  "version": "1.0.0",
-  "displayName": "CSV Data System",
-  "description": "Loads CSV tables from Resources and applies row values to GameObjects, with level-based row switching.",
-  "unity": "2021.3",
-  "keywords": ["csv", "data", "table"]
-}

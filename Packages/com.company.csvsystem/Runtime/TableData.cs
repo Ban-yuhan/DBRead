@@ -6,22 +6,32 @@ using UnityEngine;
 namespace MyCSVSystem
 {
     /// <summary>
-    /// 단일 CSV 테이블의 전체 데이터(행들의 모음)를 관리하는 클래스
+    /// 단일 CSV 테이블의 전체 데이터(행들의 모음)를 관리하는 클래스. 행은 파일 순서를 유지합니다.
     /// </summary>
     public class TableData
     {
-        private Dictionary<string, RowEntity> _rows = new Dictionary<string, RowEntity>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, RowEntity> _rows = new Dictionary<string, RowEntity>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _order = new List<string>();
 
-        public void AddRow(string id, RowEntity row)
+        /// <summary>
+        /// 행을 추가합니다. ID가 중복되면 뒤의 행으로 덮어쓰고 false를 반환합니다 (보고는 호출하는 쪽이 합니다).
+        /// </summary>
+        public bool AddRow(string id, RowEntity row)
         {
-            if (string.IsNullOrEmpty(id)) return;
+            if (string.IsNullOrEmpty(id)) return false;
 
             if (_rows.ContainsKey(id))
             {
-                Debug.LogWarning($"[TableData] 중복된 ID '{id}'가 있어 앞의 행을 덮어씁니다.");
+                _rows[id] = row;
+                return false;
             }
+
             _rows[id] = row;
+            _order.Add(id);
+            return true;
         }
+
+        public int Count => _order.Count;
 
         /// <summary>
         /// 특정 ID 또는 Key를 가진 행이 존재하는지 확인합니다.
@@ -61,9 +71,13 @@ namespace MyCSVSystem
         /// </summary>
         public RowEntity FindRowByColumn(string columnName, string value)
         {
-            return _rows.Values.FirstOrDefault(r => r.Get<string>(columnName) == value);
+            return AllRows.FirstOrDefault(r => r.Get<string>(columnName) == value);
         }
 
-        public IEnumerable<RowEntity> AllRows => _rows.Values;
+        /// <summary>파일 순서의 행 ID</summary>
+        public IReadOnlyList<string> RowIds => _order;
+
+        /// <summary>파일 순서의 행</summary>
+        public IEnumerable<RowEntity> AllRows => _order.Select(id => _rows[id]);
     }
 }

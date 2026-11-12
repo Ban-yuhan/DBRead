@@ -23,6 +23,9 @@ namespace MyCSVSystem
         [Tooltip("시작 시 자동으로 데이터를 불러올지 여부")]
         public bool autoInit = true;
 
+        /// <summary>새 행의 값이 적용될 때마다 발생합니다.</summary>
+        public event Action StatsApplied;
+
         public int CurrentLevel { get; private set; } = 1;
         public bool IsInitialized { get; private set; }
 
@@ -102,16 +105,17 @@ namespace MyCSVSystem
                 _runtimeStats[col] = row.Get<object>(col);
             }
 
-            if (row.TryGetStat("level", out int rowLevel)) CurrentLevel = rowLevel;
+            CurrentLevel = row.GetStat("level", CurrentLevel);
+            StatsApplied?.Invoke();
         }
 
         public bool TryGetStat<T>(string key, out T result)
         {
             EnsureInitialized();
 
-            if (RowEntity.TryFind(_runtimeStats, key, out object value))
+            if (StatValue.TryFind(_runtimeStats, key, out object value))
             {
-                return RowEntity.TryConvert(value, out result);
+                return StatValue.TryConvert(value, out result);
             }
 
             result = default;
@@ -120,15 +124,7 @@ namespace MyCSVSystem
 
         public T GetStat<T>(string key, T defaultValue = default)
         {
-            EnsureInitialized();
-
-            if (!RowEntity.TryFind(_runtimeStats, key, out object value))
-            {
-                Debug.LogWarning($"[EntryCloner] '{targetTable}' 테이블에서 '{key}' 컬럼을 찾을 수 없어 기본값 '{defaultValue}'을(를) 사용합니다. ({gameObject.name})", this);
-                return defaultValue;
-            }
-
-            return RowEntity.TryConvert(value, out T result) ? result : defaultValue;
+            return TryGetStat(key, out T result) ? result : defaultValue;
         }
 
         public void SetStat(string key, object val)

@@ -70,70 +70,19 @@ namespace MyCSVSystem
                 return;
             }
 
-            List<List<string>> rows = CSVParser.ParseCSV(csvFile.text);
+            var errors = new List<string>();
+            TableData newTable = CsvTableReader.Read(csvFile.text, tableName, errors);
+            foreach (string error in errors)
+                Debug.LogWarning($"[DatabaseManager] {error}");
 
-            if (rows == null || rows.Count < 3)
+            if (newTable == null || newTable.Count == 0)
             {
                 Debug.LogWarning($"[DatabaseManager] '{tableName}'의 데이터가 부족합니다.");
                 return;
             }
 
-            List<string> headers = rows[0];
-            List<string> types = rows[1];
-            TableData newTable = new TableData();
-
-            int loadedRowCount = 0;
-
-            for (int i = 2; i < rows.Count; i++)
-            {
-                List<string> values = rows[i];
-
-                // 완전히 비어있는 행 건너뛰기
-                bool allEmpty = true;
-                for (int k = 0; k < values.Count; k++)
-                {
-                    if (!string.IsNullOrWhiteSpace(values[k]))
-                    {
-                        allEmpty = false;
-                        break;
-                    }
-                }
-                if (allEmpty) continue;
-
-                // 부족한 필드에 string.Empty를 자동 패딩하여 파서로 넘김 (사일런트 행 누락 방지)
-                string[] paddedValues = new string[headers.Count];
-                for (int j = 0; j < headers.Count; j++)
-                {
-                    if (j < values.Count)
-                    {
-                        paddedValues[j] = values[j];
-                    }
-                    else
-                    {
-                        paddedValues[j] = string.Empty;
-                    }
-                }
-
-                RowEntity row = new RowEntity();
-
-                for (int j = 0; j < headers.Count; j++)
-                {
-                    string header = headers[j].Trim();
-                    if (string.IsNullOrEmpty(header)) continue;
-
-                    string colType = j < types.Count ? types[j].Trim() : "string";
-                    object parsedValue = CSVParser.ParseValue(colType, paddedValues[j]);
-
-                    row.SetField(header, parsedValue, colType);
-                }
-
-                string rowId = paddedValues[0].Trim();
-                newTable.AddRow(rowId, row);
-                loadedRowCount++;
-            }
-
             _tables[tableName] = newTable;
-            Debug.Log($"<color=green>[DatabaseManager]</color> 테이블 로드 완료 : <b>{tableName}</b> ({loadedRowCount}개 행)");
+            Debug.Log($"<color=green>[DatabaseManager]</color> 테이블 로드 완료 : <b>{tableName}</b> ({newTable.Count}개 행)");
         }
 
         public TableData GetTable(string tableName)
